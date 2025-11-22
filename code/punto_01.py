@@ -4,7 +4,7 @@
 
 import pandas as pd
 from pathlib import Path
-anio = "2025"
+anio = "2024"
 # ---------------------------------------------------
 # CONFIGURACIÓN BÁSICA
 # ---------------------------------------------------
