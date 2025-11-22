@@ -5,26 +5,26 @@ from pathlib import Path
 # CONFIGURACIÓN
 # -----------------------------------------
 
-base_dir = Path("..")   # cambiar si tu script está en otra ubicación
+base_dir = Path("..")
 anios = list(range(2016, 2026))
 
-# -----------------------------------------
-# 1) LEER TODOS LOS TXT DE TODAS LAS CARPETAS
-# -----------------------------------------
-
 dfs = []
+
+# -----------------------------------------
+# 1) LECTURA MULTIANUAL
+# -----------------------------------------
 
 for anio in anios:
     carpeta_anio = base_dir / str(anio)
 
     if not carpeta_anio.exists():
-        print(f"⚠ Carpeta {carpeta_anio} no existe, se saltea.")
+        print(f"Carpeta {carpeta_anio} no existe, se saltea.")
         continue
 
     archivos = sorted(carpeta_anio.glob("usu_individual_*.txt"))
 
     if not archivos:
-        print(f"⚠ No hay archivos en {carpeta_anio}")
+        print(f"No hay archivos en {carpeta_anio}")
         continue
 
     print(f"\nLeyendo archivos del año {anio}:")
@@ -45,12 +45,9 @@ for anio in anios:
             "P47T","IPCF","NIVEL_ED","CH04","CH06"
         ]
 
-        cols = [c for c in columnas if c in df.columns]
-        df = df[cols]
-
+        df = df[[c for c in columnas if c in df.columns]]
         dfs.append(df)
 
-# Unir todo en un solo DataFrame
 personas = pd.concat(dfs, ignore_index=True)
 print("\nTotal registros cargados:", len(personas))
 
@@ -58,24 +55,36 @@ print("\nTotal registros cargados:", len(personas))
 # 2) LIMPIEZA
 # -----------------------------------------
 
-for col in ["ANO4","TRIMESTRE","AGLOMERADO","ESTADO","PONDERA","IPCF","P47T","NIVEL_ED","CH04","CH06"]:
+for col in ["ANO4","TRIMESTRE","AGLOMERADO","ESTADO","PONDERA",
+            "IPCF","P47T","NIVEL_ED","CH04","CH06"]:
     if col in personas.columns:
         personas[col] = pd.to_numeric(personas[col], errors="coerce")
 
-# Filtrar aglomerados
 personas = personas[personas["AGLOMERADO"].isin([27,33])]
-
-# Sacar menores de 10
 personas = personas[personas["ESTADO"] != 4]
 
-# Agregar columnas
+# FILTRAR ingresos no válidos
+personas = personas[personas["IPCF"] > 0]
+
+# Mantener NIVEL_ED = 7 (no eliminar)
+mapa_nivel = {
+    1: "Primaria incompleta",
+    2: "Primaria completa",
+    3: "Secundaria incompleta",
+    4: "Secundaria completa",
+    5: "Superior incompleto",
+    6: "Superior completo",
+    7: "NS/NC"        # 🔥 Se mantiene
+}
+
+personas["NIVEL_ED_NOMBRE"] = personas["NIVEL_ED"].map(mapa_nivel)
+
 personas["AGLOMERADO_NOM"] = personas["AGLOMERADO"].map({
     27: "Gran San Juan",
     33: "Partidos del GBA"
 })
 
 personas["PERIODO"] = personas["ANO4"].astype(int).astype(str) + "T" + personas["TRIMESTRE"].astype(int).astype(str)
-
 personas["SEXO"] = personas["CH04"].map({1:"Varón", 2:"Mujer"})
 
 def clasificar_edad(edad):
@@ -83,11 +92,10 @@ def clasificar_edad(edad):
     if edad < 25: return "Jóvenes (15-24)"
     if edad < 55: return "Adultos (25-54)"
     return "Mayores (55+)"
-
 personas["GRUPO_EDAD"] = personas["CH06"].apply(clasificar_edad)
 
 # -----------------------------------------
-# FUNCIONES AUXILIARES
+# 3) FUNCIONES AUXILIARES
 # -----------------------------------------
 
 def ingreso_stats(gr):
@@ -113,16 +121,16 @@ def tasas_laborales(gr):
     })
 
 # -----------------------------------------
-# 3) ANALISIS MULTIANUAL
+# 4) SALIDAS
 # -----------------------------------------
 
 salidas = base_dir / "salidas_punto2_global"
 salidas.mkdir(exist_ok=True)
 
-# ---- A: INGRESO POR NIVEL EDUCATIVO (todos los años) ----
+# ---- A: INGRESO POR NIVEL EDUCATIVO ----
 ingreso_nivel = (
     personas
-    .groupby(["ANO4","PERIODO","AGLOMERADO_NOM","NIVEL_ED"])
+    .groupby(["ANO4","PERIODO","AGLOMERADO_NOM","NIVEL_ED_NOMBRE"])
     .apply(ingreso_stats)
     .reset_index()
 )
@@ -130,7 +138,7 @@ ingreso_nivel = (
 ingreso_nivel.to_csv(salidas / "ingreso_por_nivel_educativo.csv",
                      index=False, encoding="utf-8-sig")
 
-print("✔ ingreso_por_nivel_educativo.csv listo")
+print("ingreso_por_nivel_educativo.csv listo")
 
 # ---- B: INGRESO POR SEXO ----
 ingreso_sexo = (
@@ -143,7 +151,7 @@ ingreso_sexo = (
 ingreso_sexo.to_csv(salidas / "ingreso_por_sexo.csv",
                     index=False, encoding="utf-8-sig")
 
-print("✔ ingreso_por_sexo.csv listo")
+print("ingreso_por_sexo.csv listo")
 
 # ---- C: TASAS POR GRUPO DE EDAD ----
 tasas_edad = (
@@ -156,12 +164,12 @@ tasas_edad = (
 tasas_edad.to_csv(salidas / "tasas_por_grupo_edad.csv",
                   index=False, encoding="utf-8-sig")
 
-print("✔ tasas_por_grupo_edad.csv listo")
+print("tasas_por_grupo_edad.csv listo")
 
 # ---- D: TASAS POR NIVEL EDUCATIVO ----
 tasas_nivel = (
     personas
-    .groupby(["ANO4","PERIODO","AGLOMERADO_NOM","NIVEL_ED"])
+    .groupby(["ANO4","PERIODO","AGLOMERADO_NOM","NIVEL_ED_NOMBRE"])
     .apply(tasas_laborales)
     .reset_index()
 )
@@ -169,7 +177,7 @@ tasas_nivel = (
 tasas_nivel.to_csv(salidas / "tasas_por_nivel_educativo.csv",
                    index=False, encoding="utf-8-sig")
 
-print("✔ tasas_por_nivel_educativo.csv listo")
+print("tasas_por_nivel_educativo.csv listo")
 
-print("\nPUNTO 2 COMPLETO (TODOS LOS AÑOS EN ARCHIVOS GLOBALES)")
-print(f"Salidas creadas en: {salidas.resolve()}")
+print("\nPUNTO 2 COMPLETO — TODOS LOS AÑOS, NIVEL 7 INCLUIDO")
+print(f"Archivos generados en: {salidas.resolve()}")
