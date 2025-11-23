@@ -4,7 +4,7 @@
 
 import pandas as pd
 from pathlib import Path
-anio = "2024"
+anio = "2025"
 # ---------------------------------------------------
 # CONFIGURACIÓN BÁSICA
 # ---------------------------------------------------
@@ -123,15 +123,16 @@ tasas = (
 
 print("\nTASAS LABORALES (primeras filas):")
 print(tasas.head())
-
 # ---------------------------------------------------
 # CÁLCULO DE MEDIDAS DE INGRESO (IPCF) (PUNTO 1)
 # ---------------------------------------------------
 
 ingresos = personas.copy()
 
-# Filtro IPCF > 0 (se descartan no respuesta / ceros)
+# Convertir IPCF a numérico por si viene como texto
 ingresos["IPCF"] = pd.to_numeric(ingresos["IPCF"], errors="coerce")
+
+# FILTRO NUEVO: excluir valores 0, negativos o nulos
 ingresos = ingresos[ingresos["IPCF"] > 0]
 
 def resumen_ingreso(gr: pd.DataFrame) -> pd.Series:
@@ -151,8 +152,6 @@ resumen_ing = (
     .sort_values(["AGLOMERADO_NOM", "PERIODO"])
 )
 
-print("\nRESUMEN DE INGRESOS (primeras filas):")
-print(resumen_ing.head())
 
 # ---------------------------------------------------
 # GUARDAR RESULTADOS A ARCHIVOS CSV
